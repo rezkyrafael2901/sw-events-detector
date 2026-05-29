@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔍 SW Events Detector</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; }
+  .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); backdrop-filter: blur(12px); }
+  .glass:hover { border-color: rgba(255,255,255,0.12); }
+  .upload-zone { border: 2px dashed rgba(255,255,255,0.15); transition: all 0.3s; }
+  .upload-zone.dragover { border-color: #f97316; background: rgba(249,115,22,0.05); }
+  .upload-zone:hover { border-color: rgba(255,255,255,0.3); }
+  .verdict-badge { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+  .marker-pass { color: #22c55e; }
+  .marker-fail { color: #ef4444; }
+  .marker-skip { color: #6b7280; }
+  .anomaly-high { border-left: 3px solid #ef4444; }
+  .anomaly-medium { border-left: 3px solid #f59e0b; }
+  .anomaly-low { border-left: 3px solid #3b82f6; }
+  .anomaly-info { border-left: 3px solid #6b7280; }
+  .score-ring { width: 160px; height: 160px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: 800; }
+  .score-ring.real { background: conic-gradient(#22c55e var(--pct), rgba(255,255,255,0.05) 0); }
+  .score-ring.suspicious { background: conic-gradient(#f59e0b var(--pct), rgba(255,255,255,0.05) 0); }
+  .score-ring.fake { background: conic-gradient(#ef4444 var(--pct), rgba(255,255,255,0.05) 0); }
+  .score-inner { width: 130px; height: 130px; border-radius: 50%; background: #0a0a0f; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .bar-fill.pass { background: #22c55e; }
+  .bar-fill.fail { background: #ef4444; }
+  .fade-in { animation: fadeIn 0.5s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #f97316; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .expand-btn { cursor: pointer; user-select: none; }
+  .expand-btn:hover { color: #f97316; }
+  .hidden { display: none; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="glass mx-auto max-w-5xl mt-6 rounded-2xl p-6">
+  <div class="flex items-center gap-3 mb-2">
+    <span class="text-3xl">🔍</span>
+    <h1 class="text-2xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">SW Events Detector</h1>
+  </div>
+  <p class="text-gray-400 text-sm">Forensic screening tool — analyze sw_events files to detect real vs generated/edited data. 26 markers + anomaly detection.</p>
+</header>
+
+<!-- Upload Zone -->
+<main class="max-w-5xl mx-auto mt-6 px-4">
+  <div id="upload-zone" class="upload-zone rounded-2xl p-12 text-center cursor-pointer glass">
+    <div id="upload-icon" class="text-5xl mb-4">📁</div>
+    <p class="text-lg font-semibold mb-2" id="upload-text">Drop sw_events ZIP file here</p>
+    <p class="text-gray-500 text-sm">or click to browse — accepts .zip files</p>
+    <input type="file" id="file-input" accept=".zip" class="hidden">
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="hidden text-center py-16">
+    <div class="spinner mx-auto mb-4"></div>
+    <p class="text-gray-400">Analyzing forensic markers...</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="hidden fade-in mt-6 space-y-4">
+
+    <!-- Verdict Card -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col md:flex-row items-center gap-6">
+        <div id="score-ring" class="score-ring real" style="--pct: 0%">
+          <div class="score-inner">
+            <span id="score-num" class="text-3xl font-bold">0</span>
+            <span class="text-xs text-gray-400">/100</span>
+          </div>
+        </div>
+        <div class="flex-1 text-center md:text-left">
+          <div id="verdict-label" class="verdict-badge mb-2">—</div>
+          <p id="verdict-detail" class="text-gray-400 text-sm leading-relaxed"></p>
+          <div class="flex flex-wrap gap-4 mt-4 text-sm">
+            <div><span class="text-gray-500">Markers Passed:</span> <span id="markers-passed" class="font-bold text-green-400">0</span>/<span id="markers-total">0</span></div>
+            <div><span class="text-gray-500">Anomalies:</span> <span id="anomaly-count" class="font-bold text-red-400">0</span></div>
+            <div><span class="text-gray-500">Base Score:</span> <span id="base-score" class="font-bold">0</span> - <span id="total-penalty" class="font-bold text-red-400">0</span> penalty</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Info -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📱 Device Info</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div><span class="text-gray-500 block">Model</span><span id="dev-model" class="font-mono">—</span></div>
+        <div><span class="text-gray-500 block">Android</span><span id="dev-android" class="font-mono">—</span></div>
+        <div><span class="text-gray-500 block">Events</span><span id="dev-events" class="font-mono">—</span></div>
+        <div><span class="text-gray-500 block">Size</span><span id="dev-size" class="font-mono">—</span></div>
+        <div><span class="text-gray-500 block">Window</span><span id="dev-window" class="font-mono text-xs">—</span></div>
+        <div><span class="text-gray-500 block">SHA256</span><span id="dev-sha" class="font-mono text-xs break-all">—</span></div>
+      </div>
+    </div>
+
+    <!-- Anomalies -->
+    <div id="anomalies-section" class="glass rounded-2xl p-6 hidden">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">🚨 Anomalies Detected</h2>
+      <div id="anomalies-list" class="space-y-3"></div>
+    </div>
+
+    <!-- Forensic Markers -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold flex items-center gap-2">🔬 Forensic Markers</h2>
+        <div class="flex gap-2">
+          <button onclick="filterMarkers('all')" class="text-xs px-3 py-1 rounded-full glass hover:bg-white/10 active-filter" data-filter="all">All</button>
+          <button onclick="filterMarkers('pass')" class="text-xs px-3 py-1 rounded-full glass hover:bg-white/10" data-filter="pass">✅ Pass</button>
+          <button onclick="filterMarkers('fail')" class="text-xs px-3 py-1 rounded-full glass hover:bg-white/10" data-filter="fail">❌ Fail</button>
+        </div>
+      </div>
+      <div id="markers-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Top Packages -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📦 Top 10 Packages</h2>
+      <div id="top-pkg-chart" class="space-y-2"></div>
+    </div>
+
+    <!-- Event Types -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📊 Event Types</h2>
+      <div id="event-types-chart" class="space-y-2"></div>
+    </div>
+
+    <!-- Analyze Another -->
+    <div class="text-center py-6">
+      <button onclick="resetUI()" class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold transition">🔍 Analyze Another File</button>
+    </div>
+  </div>
+</main>
+
+<footer class="text-center text-gray-600 text-xs py-8">SW Events Detector — Forensic Screening Tool</footer>
+
+<script>
+let allChecks = [];
+
+const dropZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const loading = document.getElementById('loading');
+const results = document.getElementById('results');
+
+// Drag & Drop
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) handleFile(files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.name.endsWith('.zip')) {
+    alert('Please upload a .zip file');
+    return;
+  }
+  uploadAndAnalyze(file);
+}
+
+async function uploadAndAnalyze(file) {
+  dropZone.classList.add('hidden');
+  loading.classList.remove('hidden');
+  results.classList.add('hidden');
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) {
+      alert('Error: ' + data.error);
+      resetUI();
+      return;
+    }
+    renderResults(data, file);
+  } catch (err) {
+    alert('Network error: ' + err.message);
+    resetUI();
+  }
+}
+
+function renderResults(data, file) {
+  loading.classList.add('hidden');
+  results.classList.remove('hidden');
+
+  const v = data.verdict;
+  const ring = document.getElementById('score-ring');
+  ring.className = 'score-ring ' + (v.verdict === 'REAL' ? 'real' : v.verdict === 'SUSPICIOUS' ? 'suspicious' : 'fake');
+  ring.style.setProperty('--pct', v.score + '%');
+
+  document.getElementById('score-num').textContent = Math.round(v.score);
+  document.getElementById('verdict-label').textContent = v.verdict_label;
+  document.getElementById('verdict-label').style.color = v.verdict_color;
+  document.getElementById('verdict-detail').textContent = v.verdict_detail;
+  document.getElementById('markers-passed').textContent = v.markers_passed;
+  document.getElementById('markers-total').textContent = v.markers_total;
+  document.getElementById('anomaly-count').textContent = v.anomaly_count;
+  document.getElementById('base-score').textContent = v.base_score;
+  document.getElementById('total-penalty').textContent = '-' + v.total_penalty;
+
+  // Device info
+  document.getElementById('dev-model').textContent = data.device.model;
+  document.getElementById('dev-android').textContent = data.device.android;
+  document.getElementById('dev-events').textContent = data.metrics.event_count?.toLocaleString() || '—';
+  document.getElementById('dev-size').textContent = data.file_info.size_kb + ' KB';
+  document.getElementById('dev-window').textContent = data.device.window_start && data.device.window_end
+    ? data.device.window_start.slice(0,10) + ' → ' + data.device.window_end.slice(0,10) : '—';
+  document.getElementById('dev-sha').textContent = data.file_info.sha256?.slice(0,16) + '...' || '—';
+
+  // Anomalies
+  const anomSection = document.getElementById('anomalies-section');
+  const anomList = document.getElementById('anomalies-list');
+  anomList.innerHTML = '';
+  if (data.anomalies.length > 0) {
+    anomSection.classList.remove('hidden');
+    data.anomalies.forEach(a => {
+      const sev = a.severity;
+      const icons = { high: '🔴', medium: '🟡', low: '🔵', info: 'ℹ️' };
+      anomList.innerHTML += `
+        <div class="glass rounded-lg p-4 anomaly-${sev}">
+          <div class="flex items-center gap-2 mb-1">
+            <span>${icons[sev] || '❓'}</span>
+            <span class="font-semibold text-sm">${a.label}</span>
+            <span class="text-xs text-gray-500 ml-auto">-${a.score_penalty} pts</span>
+          </div>
+          <p class="text-gray-400 text-xs">${a.detail}</p>
+        </div>`;
+    });
+  } else {
+    anomSection.classList.add('hidden');
+  }
+
+  // Forensic markers
+  allChecks = data.checks;
+  renderMarkers('all');
+
+  // Top packages
+  const pkgChart = document.getElementById('top-pkg-chart');
+  pkgChart.innerHTML = '';
+  const maxPkg = data.top_packages.length > 0 ? data.top_packages[0][1] : 1;
+  data.top_packages.forEach(([pkg, count]) => {
+    const pct = (count / data.metrics.event_count * 100).toFixed(1);
+    const barW = (count / maxPkg * 100).toFixed(0);
+    pkgChart.innerHTML += `
+      <div class="flex items-center gap-3 text-xs">
+        <span class="w-48 truncate text-gray-300 font-mono text-right">${pkg}</span>
+        <div class="flex-1 bar"><div class="bar-fill pass" style="width:${barW}%"></div></div>
+        <span class="w-16 text-gray-400 text-right">${pct}%</span>
+      </div>`;
+  });
+
+  // Event types
+  const evtChart = document.getElementById('event-types-chart');
+  evtChart.innerHTML = '';
+  const maxEvt = data.event_types.length > 0 ? data.event_types[0][1] : 1;
+  data.event_types.forEach(([etype, count]) => {
+    const pct = (count / data.metrics.event_count * 100).toFixed(1);
+    const barW = (count / maxEvt * 100).toFixed(0);
+    evtChart.innerHTML += `
+      <div class="flex items-center gap-3 text-xs">
+        <span class="w-48 truncate text-gray-300 font-mono text-right">${etype}</span>
+        <div class="flex-1 bar"><div class="bar-fill pass" style="width:${barW}%"></div></div>
+        <span class="w-16 text-gray-400 text-right">${pct}%</span>
+      </div>`;
+  });
+}
+
+function renderMarkers(filter) {
+  const list = document.getElementById('markers-list');
+  list.innerHTML = '';
+  const checks = filter === 'all' ? allChecks : allChecks.filter(c => c.status === filter);
+  checks.forEach(c => {
+    const icon = c.status === 'pass' ? '✅' : c.status === 'fail' ? '❌' : '⏭️';
+    const cls = 'marker-' + c.status;
+    const barW = c.value !== null ? Math.min(100, Math.max(5, (c.value / parseFloat(c.range.split('-')[1]) * 100))) : 0;
+    list.innerHTML += `
+      <div class="flex items-center gap-3 text-xs py-1.5">
+        <span class="w-6 text-center">${icon}</span>
+        <span class="w-44 text-gray-300 text-right">${c.label}</span>
+        <div class="flex-1 bar"><div class="bar-fill ${c.status === 'pass' ? 'pass' : 'fail'}" style="width:${barW}%"></div></div>
+        <span class="w-20 text-right font-mono ${cls}">${c.value !== null ? c.value : '—'}</span>
+        <span class="w-28 text-gray-500 text-right text-[10px]">[${c.range}]</span>
+      </div>`;
+  });
+
+  // Update filter buttons
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.classList.toggle('active-filter', btn.dataset.filter === filter);
+    if (btn.dataset.filter === filter) btn.classList.add('bg-white/10');
+    else btn.classList.remove('bg-white/10');
+  });
+}
+
+function filterMarkers(filter) {
+  renderMarkers(filter);
+}
+
+function resetUI() {
+  dropZone.classList.remove('hidden');
+  loading.classList.add('hidden');
+  results.classList.add('hidden');
+  fileInput.value = '';
+}
+</script>
+</body>
+</html>
