@@ -65,7 +65,7 @@ BRAND_SYSTEM = {
     "google": {"com.google.android.apps.nexuslauncher", "com.google.android.dialer"},
     "oneplus": {"com.oneplus.launcher", "com.oneplus.camera"},
     "motorola": {"com.motorola.launcher3", "com.motorola.camera"},
-    "poco": {"com.mi.launcher", "com.miui.securitycenter"},
+    "poco": {"com.mi.launcher", "com.miui.securitycenter", "com.miui.home", "com.miui.gallery"},
 }
 
 
@@ -384,9 +384,24 @@ def run_anomaly_detection(metrics: Dict, events: List[dict]) -> List[Dict]:
             break
 
     if detected_brand:
+        # POCO is a Xiaomi sub-brand — skip xiaomi check for poco devices
+        skip_brands = {detected_brand}
+        if detected_brand == "poco":
+            skip_brands.add("xiaomi")
+        elif detected_brand == "xiaomi":
+            skip_brands.add("poco")
+        elif detected_brand == "realme":
+            skip_brands.add("oppo")  # realme uses ColorOS/OPPO packages
+        elif detected_brand == "oppo":
+            skip_brands.add("realme")
+        elif detected_brand == "tecno":
+            skip_brands.add("infinix")  # both Transsion
+        elif detected_brand == "infinix":
+            skip_brands.add("tecno")
+        
         other_brands = []
         for brand, sys_pkgs in BRAND_SYSTEM.items():
-            if brand == detected_brand:
+            if brand in skip_brands:
                 continue
             overlap = packages & sys_pkgs
             if len(overlap) >= 2:
