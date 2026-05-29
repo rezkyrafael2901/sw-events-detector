@@ -34,40 +34,63 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #f97316; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .expand-btn { cursor: pointer; user-select: none; }
-  .expand-btn:hover { color: #f97316; }
+  .mode-btn { transition: all 0.2s; }
+  .mode-btn.active { background: #f97316; color: white; }
+  .file-pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px; padding: 4px 12px; font-size: 12px; }
+  .file-pill .remove { cursor: pointer; color: #ef4444; font-weight: bold; }
+  .file-pill .remove:hover { color: #f87171; }
+  .batch-row { cursor: pointer; transition: background 0.15s; }
+  .batch-row:hover { background: rgba(255,255,255,0.04); }
+  .batch-detail { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+  .batch-detail.open { max-height: 2000px; }
+  .verdict-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .verdict-dot.real { background: #22c55e; }
+  .verdict-dot.suspicious { background: #f59e0b; }
+  .verdict-dot.likely_fake, .verdict-dot.definitely_fake { background: #ef4444; }
+  .summary-card { min-width: 120px; }
   .hidden { display: none; }
 </style>
 </head>
 <body class="min-h-screen">
 
-<!-- Header -->
 <header class="glass mx-auto max-w-5xl mt-6 rounded-2xl p-6">
   <div class="flex items-center gap-3 mb-2">
     <span class="text-3xl">🔍</span>
     <h1 class="text-2xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">SW Events Detector</h1>
   </div>
-  <p class="text-gray-400 text-sm">Forensic screening tool — analyze sw_events files to detect real vs generated/edited data. 26 markers + anomaly detection.</p>
+  <p class="text-gray-400 text-sm">Forensic screening — detect real vs generated/edited sw_events files. 26 markers + 10 anomaly detectors.</p>
 </header>
 
-<!-- Upload Zone -->
 <main class="max-w-5xl mx-auto mt-6 px-4">
+
+  <!-- Mode Switcher -->
+  <div class="flex items-center gap-2 mb-4">
+    <button id="mode-single" class="mode-btn active px-4 py-2 rounded-lg text-sm font-semibold" onclick="setMode('single')">📄 Single File</button>
+    <button id="mode-batch" class="mode-btn px-4 py-2 rounded-lg text-sm font-semibold glass" onclick="setMode('batch')">📁 Batch Upload</button>
+  </div>
+
+  <!-- Upload Zone -->
   <div id="upload-zone" class="upload-zone rounded-2xl p-12 text-center cursor-pointer glass">
     <div id="upload-icon" class="text-5xl mb-4">📁</div>
     <p class="text-lg font-semibold mb-2" id="upload-text">Drop sw_events ZIP file here</p>
-    <p class="text-gray-500 text-sm">or click to browse — accepts .zip files</p>
+    <p class="text-gray-500 text-sm" id="upload-sub">or click to browse — accepts .zip files</p>
     <input type="file" id="file-input" accept=".zip" class="hidden">
+    <!-- File pills (batch mode) -->
+    <div id="file-pills" class="hidden mt-4 flex flex-wrap gap-2 justify-center"></div>
+    <!-- Batch analyze button -->
+    <button id="batch-btn" class="hidden mt-4 px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold transition">
+      🔍 Analyze All (<span id="batch-count">0</span> files)
+    </button>
   </div>
 
   <!-- Loading -->
   <div id="loading" class="hidden text-center py-16">
     <div class="spinner mx-auto mb-4"></div>
-    <p class="text-gray-400">Analyzing forensic markers...</p>
+    <p class="text-gray-400" id="loading-text">Analyzing forensic markers...</p>
   </div>
 
-  <!-- Results -->
-  <div id="results" class="hidden fade-in mt-6 space-y-4">
-
+  <!-- ===== SINGLE RESULTS ===== -->
+  <div id="single-results" class="hidden fade-in mt-6 space-y-4">
     <!-- Verdict Card -->
     <div class="glass rounded-2xl p-6">
       <div class="flex flex-col md:flex-row items-center gap-6">
@@ -81,14 +104,13 @@
           <div id="verdict-label" class="verdict-badge mb-2">—</div>
           <p id="verdict-detail" class="text-gray-400 text-sm leading-relaxed"></p>
           <div class="flex flex-wrap gap-4 mt-4 text-sm">
-            <div><span class="text-gray-500">Markers Passed:</span> <span id="markers-passed" class="font-bold text-green-400">0</span>/<span id="markers-total">0</span></div>
+            <div><span class="text-gray-500">Markers:</span> <span id="markers-passed" class="font-bold text-green-400">0</span>/<span id="markers-total">0</span></div>
             <div><span class="text-gray-500">Anomalies:</span> <span id="anomaly-count" class="font-bold text-red-400">0</span></div>
-            <div><span class="text-gray-500">Base Score:</span> <span id="base-score" class="font-bold">0</span> - <span id="total-penalty" class="font-bold text-red-400">0</span> penalty</div>
+            <div><span class="text-gray-500">Score:</span> <span id="base-score" class="font-bold">0</span> - <span id="total-penalty" class="font-bold text-red-400">0</span></div>
           </div>
         </div>
       </div>
     </div>
-
     <!-- Device Info -->
     <div class="glass rounded-2xl p-6">
       <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📱 Device Info</h2>
@@ -101,13 +123,11 @@
         <div><span class="text-gray-500 block">SHA256</span><span id="dev-sha" class="font-mono text-xs break-all">—</span></div>
       </div>
     </div>
-
     <!-- Anomalies -->
     <div id="anomalies-section" class="glass rounded-2xl p-6 hidden">
       <h2 class="text-lg font-bold mb-4 flex items-center gap-2">🚨 Anomalies Detected</h2>
       <div id="anomalies-list" class="space-y-3"></div>
     </div>
-
     <!-- Forensic Markers -->
     <div class="glass rounded-2xl p-6">
       <div class="flex items-center justify-between mb-4">
@@ -120,90 +140,164 @@
       </div>
       <div id="markers-list" class="space-y-2"></div>
     </div>
-
     <!-- Top Packages -->
     <div class="glass rounded-2xl p-6">
       <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📦 Top 10 Packages</h2>
       <div id="top-pkg-chart" class="space-y-2"></div>
     </div>
-
     <!-- Event Types -->
     <div class="glass rounded-2xl p-6">
       <h2 class="text-lg font-bold mb-4 flex items-center gap-2">📊 Event Types</h2>
       <div id="event-types-chart" class="space-y-2"></div>
     </div>
-
-    <!-- Analyze Another -->
+    <!-- Back -->
     <div class="text-center py-6">
-      <button onclick="resetUI()" class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold transition">🔍 Analyze Another File</button>
+      <button onclick="resetUI()" class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold transition">🔍 Analyze Another</button>
     </div>
   </div>
+
+  <!-- ===== BATCH RESULTS ===== -->
+  <div id="batch-results" class="hidden fade-in mt-6 space-y-4">
+    <!-- Summary Cards -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4">📊 Batch Summary</h2>
+      <div id="summary-cards" class="flex flex-wrap gap-3"></div>
+    </div>
+    <!-- File List -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4">📋 Files (<span id="batch-total">0</span>)</h2>
+      <div id="batch-list" class="space-y-2"></div>
+    </div>
+    <!-- Back -->
+    <div class="text-center py-6">
+      <button onclick="resetUI()" class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold transition">🔍 Analyze More Files</button>
+    </div>
+  </div>
+
 </main>
 
 <footer class="text-center text-gray-600 text-xs py-8">SW Events Detector — Forensic Screening Tool</footer>
 
 <script>
 let allChecks = [];
+let currentMode = 'single';
+let selectedFiles = [];
 
 const dropZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
 const loading = document.getElementById('loading');
-const results = document.getElementById('results');
+const singleResults = document.getElementById('single-results');
+const batchResults = document.getElementById('batch-results');
+const batchBtn = document.getElementById('batch-btn');
+const filePills = document.getElementById('file-pills');
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-single').classList.toggle('active', mode === 'single');
+  document.getElementById('mode-batch').classList.toggle('active', mode === 'batch');
+  document.getElementById('mode-single').classList.toggle('glass', mode !== 'single');
+  document.getElementById('mode-batch').classList.toggle('glass', mode !== 'batch');
+  fileInput.multiple = mode === 'batch';
+  selectedFiles = [];
+  filePills.innerHTML = '';
+  filePills.classList.add('hidden');
+  batchBtn.classList.add('hidden');
+  document.getElementById('upload-text').textContent = mode === 'single' ? 'Drop sw_events ZIP file here' : 'Drop multiple sw_events ZIP files here';
+  document.getElementById('upload-sub').textContent = mode === 'single' ? 'or click to browse — accepts .zip files' : 'or click to browse — select multiple .zip files';
+  document.getElementById('upload-icon').textContent = mode === 'single' ? '📁' : '📂';
+}
 
 // Drag & Drop
-dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('click', (e) => { if (e.target === dropZone || e.target.closest('#upload-icon') || e.target.closest('#upload-text') || e.target.closest('#upload-sub')) fileInput.click(); });
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
-  const files = e.dataTransfer.files;
-  if (files.length > 0) handleFile(files[0]);
+  const files = [...e.dataTransfer.files].filter(f => f.name.endsWith('.zip'));
+  if (files.length === 0) { alert('Please upload .zip files'); return; }
+  if (currentMode === 'single') handleFile(files[0]);
+  else handleBatchFiles(files);
 });
 fileInput.addEventListener('change', () => {
-  if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+  const files = [...fileInput.files];
+  if (files.length === 0) return;
+  if (currentMode === 'single') handleFile(files[0]);
+  else handleBatchFiles(files);
 });
 
 function handleFile(file) {
-  if (!file.name.endsWith('.zip')) {
-    alert('Please upload a .zip file');
-    return;
-  }
-  uploadAndAnalyze(file);
+  uploadSingle(file);
 }
 
-async function uploadAndAnalyze(file) {
+function handleBatchFiles(files) {
+  selectedFiles = files;
+  filePills.classList.remove('hidden');
+  filePills.innerHTML = '';
+  files.forEach((f, i) => {
+    filePills.innerHTML += `<span class="file-pill">${f.name} <span class="remove" onclick="removeFile(${i})">✕</span></span>`;
+  });
+  batchBtn.classList.remove('hidden');
+  document.getElementById('batch-count').textContent = files.length;
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  if (selectedFiles.length === 0) {
+    filePills.classList.add('hidden');
+    batchBtn.classList.add('hidden');
+  } else {
+    handleBatchFiles(selectedFiles);
+  }
+}
+
+batchBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (selectedFiles.length > 0) uploadBatch(selectedFiles);
+});
+
+async function uploadSingle(file) {
   dropZone.classList.add('hidden');
   loading.classList.remove('hidden');
-  results.classList.add('hidden');
+  singleResults.classList.add('hidden');
+  batchResults.classList.add('hidden');
 
   const form = new FormData();
   form.append('file', file);
-
   try {
     const res = await fetch('/api/analyze', { method: 'POST', body: form });
     const data = await res.json();
-    if (data.error) {
-      alert('Error: ' + data.error);
-      resetUI();
-      return;
-    }
-    renderResults(data, file);
-  } catch (err) {
-    alert('Network error: ' + err.message);
-    resetUI();
-  }
+    if (data.error) { alert('Error: ' + data.error); resetUI(); return; }
+    renderSingleResults(data);
+  } catch (err) { alert('Network error: ' + err.message); resetUI(); }
 }
 
-function renderResults(data, file) {
+async function uploadBatch(files) {
+  dropZone.classList.add('hidden');
+  loading.classList.remove('hidden');
+  singleResults.classList.add('hidden');
+  batchResults.classList.add('hidden');
+  document.getElementById('loading-text').textContent = `Analyzing ${files.length} files...`;
+
+  const form = new FormData();
+  files.forEach(f => form.append('files', f));
+  try {
+    const res = await fetch('/api/batch', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) { alert('Error: ' + data.error); resetUI(); return; }
+    renderBatchResults(data);
+  } catch (err) { alert('Network error: ' + err.message); resetUI(); }
+}
+
+// ── Single Results ──
+function renderSingleResults(data) {
   loading.classList.add('hidden');
-  results.classList.remove('hidden');
+  singleResults.classList.remove('hidden');
 
   const v = data.verdict;
   const ring = document.getElementById('score-ring');
   ring.className = 'score-ring ' + (v.verdict === 'REAL' ? 'real' : v.verdict === 'SUSPICIOUS' ? 'suspicious' : 'fake');
   ring.style.setProperty('--pct', v.score + '%');
-
   document.getElementById('score-num').textContent = Math.round(v.score);
   document.getElementById('verdict-label').textContent = v.verdict_label;
   document.getElementById('verdict-label').style.color = v.verdict_color;
@@ -214,7 +308,6 @@ function renderResults(data, file) {
   document.getElementById('base-score').textContent = v.base_score;
   document.getElementById('total-penalty').textContent = '-' + v.total_penalty;
 
-  // Device info
   document.getElementById('dev-model').textContent = data.device.model;
   document.getElementById('dev-android').textContent = data.device.android;
   document.getElementById('dev-events').textContent = data.metrics.event_count?.toLocaleString() || '—';
@@ -230,54 +323,27 @@ function renderResults(data, file) {
   if (data.anomalies.length > 0) {
     anomSection.classList.remove('hidden');
     data.anomalies.forEach(a => {
-      const sev = a.severity;
       const icons = { high: '🔴', medium: '🟡', low: '🔵', info: 'ℹ️' };
-      anomList.innerHTML += `
-        <div class="glass rounded-lg p-4 anomaly-${sev}">
-          <div class="flex items-center gap-2 mb-1">
-            <span>${icons[sev] || '❓'}</span>
-            <span class="font-semibold text-sm">${a.label}</span>
-            <span class="text-xs text-gray-500 ml-auto">-${a.score_penalty} pts</span>
-          </div>
-          <p class="text-gray-400 text-xs">${a.detail}</p>
-        </div>`;
+      anomList.innerHTML += `<div class="glass rounded-lg p-4 anomaly-${a.severity}"><div class="flex items-center gap-2 mb-1"><span>${icons[a.severity]||'❓'}</span><span class="font-semibold text-sm">${a.label}</span><span class="text-xs text-gray-500 ml-auto">-${a.score_penalty} pts</span></div><p class="text-gray-400 text-xs">${a.detail}</p></div>`;
     });
-  } else {
-    anomSection.classList.add('hidden');
-  }
+  } else { anomSection.classList.add('hidden'); }
 
-  // Forensic markers
   allChecks = data.checks;
   renderMarkers('all');
 
-  // Top packages
-  const pkgChart = document.getElementById('top-pkg-chart');
-  pkgChart.innerHTML = '';
-  const maxPkg = data.top_packages.length > 0 ? data.top_packages[0][1] : 1;
-  data.top_packages.forEach(([pkg, count]) => {
-    const pct = (count / data.metrics.event_count * 100).toFixed(1);
-    const barW = (count / maxPkg * 100).toFixed(0);
-    pkgChart.innerHTML += `
-      <div class="flex items-center gap-3 text-xs">
-        <span class="w-48 truncate text-gray-300 font-mono text-right">${pkg}</span>
-        <div class="flex-1 bar"><div class="bar-fill pass" style="width:${barW}%"></div></div>
-        <span class="w-16 text-gray-400 text-right">${pct}%</span>
-      </div>`;
-  });
+  // Charts
+  renderBarChart('top-pkg-chart', data.top_packages, data.metrics.event_count);
+  renderBarChart('event-types-chart', data.event_types, data.metrics.event_count);
+}
 
-  // Event types
-  const evtChart = document.getElementById('event-types-chart');
-  evtChart.innerHTML = '';
-  const maxEvt = data.event_types.length > 0 ? data.event_types[0][1] : 1;
-  data.event_types.forEach(([etype, count]) => {
-    const pct = (count / data.metrics.event_count * 100).toFixed(1);
-    const barW = (count / maxEvt * 100).toFixed(0);
-    evtChart.innerHTML += `
-      <div class="flex items-center gap-3 text-xs">
-        <span class="w-48 truncate text-gray-300 font-mono text-right">${etype}</span>
-        <div class="flex-1 bar"><div class="bar-fill pass" style="width:${barW}%"></div></div>
-        <span class="w-16 text-gray-400 text-right">${pct}%</span>
-      </div>`;
+function renderBarChart(containerId, items, total) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  const maxVal = items.length > 0 ? items[0][1] : 1;
+  items.forEach(([name, count]) => {
+    const pct = (count / total * 100).toFixed(1);
+    const barW = (count / maxVal * 100).toFixed(0);
+    el.innerHTML += `<div class="flex items-center gap-3 text-xs"><span class="w-48 truncate text-gray-300 font-mono text-right">${name}</span><div class="flex-1 bar"><div class="bar-fill pass" style="width:${barW}%"></div></div><span class="w-16 text-gray-400 text-right">${pct}%</span></div>`;
   });
 }
 
@@ -287,35 +353,97 @@ function renderMarkers(filter) {
   const checks = filter === 'all' ? allChecks : allChecks.filter(c => c.status === filter);
   checks.forEach(c => {
     const icon = c.status === 'pass' ? '✅' : c.status === 'fail' ? '❌' : '⏭️';
-    const cls = 'marker-' + c.status;
     const barW = c.value !== null ? Math.min(100, Math.max(5, (c.value / parseFloat(c.range.split('-')[1]) * 100))) : 0;
-    list.innerHTML += `
-      <div class="flex items-center gap-3 text-xs py-1.5">
-        <span class="w-6 text-center">${icon}</span>
-        <span class="w-44 text-gray-300 text-right">${c.label}</span>
-        <div class="flex-1 bar"><div class="bar-fill ${c.status === 'pass' ? 'pass' : 'fail'}" style="width:${barW}%"></div></div>
-        <span class="w-20 text-right font-mono ${cls}">${c.value !== null ? c.value : '—'}</span>
-        <span class="w-28 text-gray-500 text-right text-[10px]">[${c.range}]</span>
-      </div>`;
+    list.innerHTML += `<div class="flex items-center gap-3 text-xs py-1.5"><span class="w-6 text-center">${icon}</span><span class="w-44 text-gray-300 text-right">${c.label}</span><div class="flex-1 bar"><div class="bar-fill ${c.status === 'pass' ? 'pass' : 'fail'}" style="width:${barW}%"></div></div><span class="w-20 text-right font-mono marker-${c.status}">${c.value !== null ? c.value : '—'}</span><span class="w-28 text-gray-500 text-right text-[10px]">[${c.range}]</span></div>`;
   });
-
-  // Update filter buttons
   document.querySelectorAll('[data-filter]').forEach(btn => {
     btn.classList.toggle('active-filter', btn.dataset.filter === filter);
     if (btn.dataset.filter === filter) btn.classList.add('bg-white/10');
     else btn.classList.remove('bg-white/10');
   });
 }
+function filterMarkers(f) { renderMarkers(f); }
 
-function filterMarkers(filter) {
-  renderMarkers(filter);
+// ── Batch Results ──
+function renderBatchResults(data) {
+  loading.classList.add('hidden');
+  batchResults.classList.remove('hidden');
+
+  const s = data.summary;
+  document.getElementById('batch-total').textContent = s.total;
+
+  // Summary cards
+  const cards = document.getElementById('summary-cards');
+  cards.innerHTML = '';
+  cards.innerHTML += `<div class="summary-card glass rounded-xl p-4 text-center"><div class="text-2xl font-bold">${s.total}</div><div class="text-xs text-gray-400">Total Files</div></div>`;
+  cards.innerHTML += `<div class="summary-card glass rounded-xl p-4 text-center"><div class="text-2xl font-bold text-green-400">${s.verdicts['REAL']||0}</div><div class="text-xs text-gray-400">✅ Authentic</div></div>`;
+  cards.innerHTML += `<div class="summary-card glass rounded-xl p-4 text-center"><div class="text-2xl font-bold text-yellow-400">${s.verdicts['SUSPICIOUS']||0}</div><div class="text-xs text-gray-400">⚠️ Suspicious</div></div>`;
+  cards.innerHTML += `<div class="summary-card glass rounded-xl p-4 text-center"><div class="text-2xl font-bold text-red-400">${(s.verdicts['LIKELY_FAKE']||0)+(s.verdicts['DEFINITELY_FAKE']||0)}</div><div class="text-xs text-gray-400">🔴 Fake</div></div>`;
+  if (s.errors > 0) cards.innerHTML += `<div class="summary-card glass rounded-xl p-4 text-center"><div class="text-2xl font-bold text-gray-400">${s.errors}</div><div class="text-xs text-gray-400">❌ Errors</div></div>`;
+
+  // File list
+  const list = document.getElementById('batch-list');
+  list.innerHTML = '';
+  data.results.forEach((r, i) => {
+    if (r.error) {
+      list.innerHTML += `<div class="glass rounded-lg p-4"><span class="text-red-400">❌</span> <span class="font-mono text-sm">${r.filename}</span> — <span class="text-gray-400 text-sm">${r.error}</span></div>`;
+      return;
+    }
+    const v = r.verdict;
+    const dotClass = v.verdict.toLowerCase();
+    list.innerHTML += `
+      <div class="batch-row glass rounded-lg" onclick="toggleBatchDetail(${i})">
+        <div class="flex items-center gap-3 p-4">
+          <span class="verdict-dot ${dotClass}"></span>
+          <span class="font-mono text-sm flex-1 truncate">${r.filename}</span>
+          <span class="text-xs text-gray-400">${r.device.model}</span>
+          <span class="text-xs text-gray-400">${r.event_count?.toLocaleString()} evt</span>
+          <span class="text-xs text-gray-400">${r.file_info.size_kb} KB</span>
+          <span class="font-bold text-sm" style="color:${v.verdict_color}">${Math.round(v.score)}/100</span>
+          <span class="text-xs font-semibold" style="color:${v.verdict_color}">${v.verdict_label}</span>
+        </div>
+        <div id="batch-detail-${i}" class="batch-detail px-4 pb-4">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs mb-3">
+            <div><span class="text-gray-500">Markers:</span> <span class="text-green-400">${v.markers_passed}</span>/<span class="text-red-400">${v.markers_failed}</span>/${v.markers_total}</div>
+            <div><span class="text-gray-500">Anomalies:</span> <span class="text-red-400">${r.anomalies.length}</span></div>
+            <div><span class="text-gray-500">Base Score:</span> ${v.base_score} - ${v.total_penalty}</div>
+            <div><span class="text-gray-500">Android:</span> ${r.device.android}</div>
+            <div><span class="text-gray-500">Packages:</span> ${r.unique_packages}</div>
+            <div><span class="text-gray-500">SHA256:</span> ${r.file_info.sha256?.slice(0,12)}...</div>
+          </div>
+          ${r.anomalies.length > 0 ? '<div class="mb-3">' + r.anomalies.map(a => {
+            const icons = { high: '🔴', medium: '🟡', low: '🔵', info: 'ℹ️' };
+            return `<div class="anomaly-${a.severity} glass rounded p-2 mb-1"><span>${icons[a.severity]||'❓'}</span> <span class="font-semibold">${a.label}</span> <span class="text-gray-500">(-${a.score_penalty}pts)</span><br><span class="text-gray-400 text-[11px]">${a.detail}</span></div>`;
+          }).join('') + '</div>' : ''}
+          <div class="flex gap-4">
+            <div class="flex-1"><div class="text-gray-500 text-[11px] mb-1">Top Packages</div>${(r.top_packages||[]).slice(0,5).map(([p,c])=>`<div class="flex gap-2 text-[11px]"><span class="truncate w-32 font-mono">${p}</span><span class="text-gray-400">${(c/r.event_count*100).toFixed(1)}%</span></div>`).join('')}</div>
+            <div class="flex-1"><div class="text-gray-500 text-[11px] mb-1">Event Types</div>${(r.event_types||[]).slice(0,5).map(([t,c])=>`<div class="flex gap-2 text-[11px]"><span class="truncate w-32 font-mono">${t}</span><span class="text-gray-400">${(c/r.event_count*100).toFixed(1)}%</span></div>`).join('')}</div>
+          </div>
+          <div class="mt-3 text-[11px]">
+            <div class="text-gray-500 mb-1">Forensic Markers</div>
+            <div class="flex flex-wrap gap-1">${(r.checks||[]).map(c=>`<span class="px-1.5 py-0.5 rounded text-[10px] ${c.status==='pass'?'bg-green-900/30 text-green-400':c.status==='fail'?'bg-red-900/30 text-red-400':'bg-gray-800 text-gray-500'}">${c.status==='pass'?'✅':'❌'} ${c.label}</span>`).join('')}</div>
+          </div>
+        </div>
+      </div>`;
+  });
+}
+
+function toggleBatchDetail(i) {
+  const el = document.getElementById('batch-detail-' + i);
+  el.classList.toggle('open');
 }
 
 function resetUI() {
   dropZone.classList.remove('hidden');
   loading.classList.add('hidden');
-  results.classList.add('hidden');
+  singleResults.classList.add('hidden');
+  batchResults.classList.add('hidden');
   fileInput.value = '';
+  selectedFiles = [];
+  filePills.innerHTML = '';
+  filePills.classList.add('hidden');
+  batchBtn.classList.add('hidden');
+  document.getElementById('loading-text').textContent = 'Analyzing forensic markers...';
 }
 </script>
 </body>
