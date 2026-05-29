@@ -14,32 +14,32 @@ from typing import Dict, List, Tuple, Optional
 # FORENSIC MARKER RANGES (from real device calibration)
 # ──────────────────────────────────────────────
 MARKERS = {
-    "total_events": {"min": 22000, "max": 104000, "label": "Total Events", "weight": 3},
-    "unique_packages": {"min": 100, "max": 600, "label": "Unique Packages", "weight": 4},
-    "unique_classes": {"min": 50, "max": 500, "label": "Unique Classes", "weight": 3},
-    "screen_pct": {"min": 0.5, "max": 10.0, "label": "SCREEN Events %", "weight": 2},
-    "gap_zero_pct": {"min": 1.0, "max": 50.0, "label": "Gap=0 (Concurrent) %", "weight": 5},
-    "gap_sub10ms_pct": {"min": 3.0, "max": 55.0, "label": "Gap<10ms %", "weight": 3},
-    "gap_10ms_1s_pct": {"min": 25.0, "max": 55.0, "label": "Gap 10ms-1s %", "weight": 4},
-    "gap_1s_10s_pct": {"min": 10.0, "max": 55.0, "label": "Gap 1s-10s %", "weight": 3},
-    "gap_10s_60s_pct": {"min": 1.0, "max": 20.0, "label": "Gap 10s-60s %", "weight": 2},
-    "gap_1m_10m_pct": {"min": 0.5, "max": 10.0, "label": "Gap 1-10min %", "weight": 2},
-    "gap_gt10m_pct": {"min": 0.01, "max": 5.0, "label": "Gap>10min %", "weight": 2},
-    "hour_entropy": {"min": 3.0, "max": 5.0, "label": "Hour Entropy", "weight": 4},
-    "events_per_day_cv": {"min": 0.1, "max": 2.0, "label": "Events/Day CV", "weight": 3},
-    "avg_burst_seq": {"min": 3.0, "max": 25.0, "label": "Avg Burst Sequence", "weight": 3},
-    "max_burst_seq": {"min": 100, "max": 800, "label": "Max Burst Sequence", "weight": 4},
-    "top5_pkg_pct": {"min": 30.0, "max": 85.0, "label": "Top5 Package %", "weight": 5},
-    "top20_pkg_pct": {"min": 45.0, "max": 95.0, "label": "Top20 Package %", "weight": 3},
-    "ms_unique": {"min": 900, "max": 1000, "label": "MS Unique Values", "weight": 6},
-    "idle_gt1hr_pct": {"min": 0.0, "max": 1.0, "label": "Idle>1hr %", "weight": 2},
-    "gap_p50": {"min": 0.005, "max": 2.0, "label": "Gap p50 (sec)", "weight": 3},
-    "gap_p90": {"min": 2.0, "max": 80.0, "label": "Gap p90 (sec)", "weight": 3},
-    "gap_p99": {"min": 100.0, "max": 900.0, "label": "Gap p99 (sec)", "weight": 3},
-    "standby_bucket_pct": {"min": 3.0, "max": 55.0, "label": "STANDBY_BUCKET %", "weight": 5},
-    "notification_pct": {"min": 5.0, "max": 30.0, "label": "NOTIFICATION %", "weight": 5},
-    "activity_pct": {"min": 20.0, "max": 50.0, "label": "ACTIVITY_PAUSED+RESUMED %", "weight": 4},
-    "pkg_entropy": {"min": 3.0, "max": 7.0, "label": "Package Entropy", "weight": 4},
+    "total_events": {"min": 5000, "max": 200000, "label": "Total Events", "weight": 3},
+    "unique_packages": {"min": 80, "max": 800, "label": "Unique Packages", "weight": 4},
+    "unique_classes": {"min": 40, "max": 600, "label": "Unique Classes", "weight": 3},
+    "screen_pct": {"min": 0.3, "max": 15.0, "label": "SCREEN Events %", "weight": 2},
+    "gap_zero_pct": {"min": 0.5, "max": 60.0, "label": "Gap=0 (Concurrent) %", "weight": 5},
+    "gap_sub10ms_pct": {"min": 2.0, "max": 60.0, "label": "Gap<10ms %", "weight": 3},
+    "gap_10ms_1s_pct": {"min": 15.0, "max": 75.0, "label": "Gap 10ms-1s %", "weight": 4},
+    "gap_1s_10s_pct": {"min": 5.0, "max": 55.0, "label": "Gap 1s-10s %", "weight": 3},
+    "gap_10s_60s_pct": {"min": 1.0, "max": 25.0, "label": "Gap 10s-60s %", "weight": 2},
+    "gap_1m_10m_pct": {"min": 0.0, "max": 15.0, "label": "Gap 1-10min %", "weight": 2},
+    "gap_gt10m_pct": {"min": 0.0, "max": 5.0, "label": "Gap>10min %", "weight": 2},
+    "hour_entropy": {"min": 2.5, "max": 5.5, "label": "Hour Entropy", "weight": 4},
+    "events_per_day_cv": {"min": 0.05, "max": 3.0, "label": "Events/Day CV", "weight": 3},
+    "avg_burst_seq": {"min": 1.0, "max": 30.0, "label": "Avg Burst Sequence", "weight": 3},
+    "max_burst_seq": {"min": 5, "max": 1000, "label": "Max Burst Sequence", "weight": 4},
+    "top5_pkg_pct": {"min": 20.0, "max": 90.0, "label": "Top5 Package %", "weight": 5},
+    "top20_pkg_pct": {"min": 40.0, "max": 98.0, "label": "Top20 Package %", "weight": 3},
+    "ms_unique": {"min": 700, "max": 1000, "label": "MS Unique Values", "weight": 6},
+    "idle_gt1hr_pct": {"min": 0.0, "max": 2.0, "label": "Idle>1hr %", "weight": 2},
+    "gap_p50": {"min": 0.001, "max": 5.0, "label": "Gap p50 (sec)", "weight": 3},
+    "gap_p90": {"min": 1.0, "max": 100.0, "label": "Gap p90 (sec)", "weight": 3},
+    "gap_p99": {"min": 30.0, "max": 1200.0, "label": "Gap p99 (sec)", "weight": 3},
+    "standby_bucket_pct": {"min": 1.0, "max": 60.0, "label": "STANDBY_BUCKET %", "weight": 5},
+    "notification_pct": {"min": 1.0, "max": 35.0, "label": "NOTIFICATION %", "weight": 5},
+    "activity_pct": {"min": 15.0, "max": 80.0, "label": "ACTIVITY_PAUSED+RESUMED %", "weight": 4},
+    "pkg_entropy": {"min": 2.5, "max": 8.0, "label": "Package Entropy", "weight": 4},
 }
 
 # Known real device models (from training data)
@@ -352,23 +352,15 @@ def run_anomaly_detection(metrics: Dict, events: List[dict]) -> List[Dict]:
             "score_penalty": 5
         })
 
-    # ── Anomaly 2: MS unique values exactly 1000 ──
+    # ── Anomaly 2: MS unique values suspicious (real devices show 995-1000) ──
     ms_unique = metrics.get("ms_unique", 0)
-    if ms_unique == 1000:
+    if ms_unique < 900:
         anomalies.append({
-            "id": "ms_exact_1000",
+            "id": "ms_low_unique",
             "severity": "high",
-            "label": "Millisecond Values: Exactly 1000",
-            "detail": "All 1000 possible millisecond values are used. Real devices typically miss a few (998-1000). Strong synthetic indicator.",
+            "label": "Millisecond Values: Too Few Unique",
+            "detail": f"Only {ms_unique}/1000 ms values used. Real devices show 995-1000 unique values. Strong synthetic indicator.",
             "score_penalty": 20
-        })
-    elif ms_unique >= 999:
-        anomalies.append({
-            "id": "ms_near_1000",
-            "severity": "low",
-            "label": "Millisecond Values: Near Perfect",
-            "detail": f"{ms_unique}/1000 ms values used. Acceptable but slightly suspicious.",
-            "score_penalty": 3
         })
 
     # ── Anomaly 3: Known real device model in generated file ──
