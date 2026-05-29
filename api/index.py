@@ -82,7 +82,7 @@ def parse_zip(data: bytes) -> Tuple[List[dict], dict, str]:
     for n in names:
         if n.endswith("events.ndjson") or n.endswith("events.jsonl"):
             events_file = n
-        if n.endswith("manifest.json"):
+        if n.endswith("manifest.json") or n == "manifest":
             manifest_file = n
 
     if not events_file:
